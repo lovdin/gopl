@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "net/http"
+    "strings"
 
     "golang.org/x/net/html"
 )
@@ -20,6 +21,15 @@ func outline(url string) error {
         return err
     }
     defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        return fmt.Errorf("getting %s: %s", url, resp.Status)
+    }
+
+    ct := resp.Header.Get("Content-Type")
+    if ct != "text/html" && !strings.HasPrefix(ct, "text/html;") {
+        return fmt.Errorf("%s has type %s, not text/html", url, ct)
+    }
 
     doc, err := html.Parse(resp.Body)
     if err != nil {

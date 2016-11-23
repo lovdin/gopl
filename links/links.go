@@ -1,28 +1,14 @@
-package main
+package links
 
 import (
     "fmt"
-    "os"
     "net/http"
     "strings"
 
     "golang.org/x/net/html"
 )
 
-func main() {
-    for _, url := range os.Args[1:] {
-        links, err := findLinks(url)
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "findLinks: %v\n", err)
-            continue
-        }
-        for _, link := range links {
-            fmt.Println(link)
-        }
-    }
-}
-
-func findLinks(url string) ([]string, error) {
+func Extract(url string) ([]string, error) {
     resp, err := http.Get(url)
     if err != nil {
         return nil, err
@@ -42,19 +28,37 @@ func findLinks(url string) ([]string, error) {
     if err != nil {
         return nil, fmt.Errorf("parsing %s as HTML: %v", url, err)
     }
-    return visit(nil, doc), nil
-}
 
-func visit(links []string, n *html.Node) []string {
-    if n.Type == html.ElementNode && n.Data == "a" {
-        for _, a := range n.Attr {
-            if a.Key == "href" {
-                links = append(links, a.Val)
+    var links []string
+    visitNode := func (n *html.Node) {
+        if n.Type == html.ElementNode && n.Data == "a" {
+            for _, a := range n.Attr {
+                if a.Key != "href" {
+                    continue
+                }
+                link, err := resp.Request.URL.Parse(a.Val)
+                if err != nil {
+                    continue
+                }
+                links = append(links, link.String())
             }
         }
     }
-    for c := n.FirstChild; c != nil; c = c.NextSibling {
-        links = visit(links, c)
+
+    forEachNode(doc, visitNode, nil)
+    return links, nil
+}
+
+func forEachNode(n *html.Node, pre, post func(n *html.Node)) {
+    if pre != nil {
+        pre(n)
     }
-    return links
+
+    for c := n.FirstChild; c != nil; c = c.NextSibling {
+        forEachNode(c, pre, post)
+    }
+
+    if post != nil {
+        post(n)
+    }
 }
